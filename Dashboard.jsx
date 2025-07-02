@@ -10,7 +10,6 @@ const MainContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   backgroundColor: '#f5f5f5',
-  minHeight: '100vh',
 }));
 
 const Content = styled(Box)(({ theme }) => ({
@@ -65,7 +64,7 @@ const StyledCard = styled(Card)({
   backgroundColor: 'white',
   borderRadius: '8px',
   marginBottom: '20px',
-  boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)',
+  boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
 });
 
 const StyledTableContainer = styled(TableContainer)({
@@ -74,7 +73,7 @@ const StyledTableContainer = styled(TableContainer)({
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
   padding: '12px',
-  borderBottom: `1px solid ${theme.palette.divider}`,
+  border: '1px solid #e0e0e0',
 }));
 
 const StyledTableHeadCell = styled(StyledTableCell)({
@@ -83,48 +82,58 @@ const StyledTableHeadCell = styled(StyledTableCell)({
   padding: '12px',
 });
 
-const StudentDashboard = () => {
+const TeacherDashboard = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [tabValue, setTabValue] = useState(0);
-  const [timetables, setTimetables] = useState([]);
+  const [timetables, setTimetablesByTime] = useState([]);
   const [myTimetable, setMyTimetable] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { currentUser, token } = useAuth();
 
   const notifications = [
-    'New timetable published for your year',
-    'Room change for CS101 on Monday',
+    'New timetable assigned for CS101',
+    'Room change for ENG202 on Wednesday',
   ];
 
+  // Function to strip titles from lecturer names
+  const stripTitles = (name) => {
+    if (!name) return '';
+    const titles = [
+      'Dr\\.?',
+      'Professor',
+      'Assoc\\.? Prof\\.?',
+      'Associate Professor',
+      'Mr\\.?',
+      'Ms\\.?',
+      'Mrs\\.?',
+    ];
+    const regex = new RegExp(`^(${titles.join('|')})\\s+`, 'i');
+    return name.replace(regex, '').trim();
+  };
+
   useEffect(() => {
-    const fetchTimetable = async () => {
-      if (!currentUser || !token || currentUser.role !== 'student') return;
-
-      console.log('currentUser:', currentUser);
-
-      if (!currentUser.year_of_study) {
-        setError('Year of study not set. Please update your profile.');
-        return;
-      }
+    const fetchTimetableData = async () => {
+      if (!currentUser || !token || currentUser.role !== 'lecturer') return;
 
       try {
         setIsLoading(true);
-        const timetableRes = await axiosInstance.get('/timetables/', {
+        const timetableDataRes = await axiosInstance.get('/timetables/', {
           headers: { Authorization: `Bearer ${token}` },
-          params: { skip: 0, limit: 100, year: currentUser.year_of_study },
+          params: { skip: 0, limit: '100' },
         });
 
-        console.log('Timetable API response:', timetableRes.data);
-
-        const filteredTimetable = timetableRes.data.filter(
-          (item) => String(item.year) === String(currentUser.year_of_study)
+        const lecturerName = `${currentUser.first_name} ${currentUser.last_name}`.toLowerCase();
+        const filteredTimetableData = timetableDataRes.data.filter(
+          (item) => {
+            if (!item.lecturer_name) return false;
+            const normalizedLecturerName = stripTitles(item.lecturer_name).toLowerCase();
+            return normalizedLecturerName.includes(lecturerName);
+          }
         );
 
-        console.log('Filtered timetable:', filteredTimetable);
-
-        const formattedTimetables = filteredTimetable.map((item) => ({
+        const formattedTimetable = filteredTimetableData.map((item) => ({
           id: item.timeslot_id,
           day: item.day_of_the_week,
           startTime: item.start_time,
@@ -134,14 +143,14 @@ const StudentDashboard = () => {
           lecturer: item.lecturer_name || `Lecturer-${item.lecturer_id}`,
           courseType: item.course_name?.toLowerCase().includes('lab') ? 'lab' : 'lecture',
           class: item.year ? `Year ${item.year}` : 'N/A',
-          year: item.year,
+          year: item.year || 'N/A',
           semester: item.semester || 'N/A',
         }));
 
-        setTimetables(formattedTimetables);
+        setTimetablesByTime(formattedTimetable);
 
         setMyTimetable(
-          filteredTimetable.map((item) => ({
+          filteredTimetableData.map((item) => ({
             course: item.course_name || `Course-${item.course_id}`,
             room: item.room_name || `Room-${item.room_id}`,
             day: item.day_of_the_week,
@@ -157,7 +166,7 @@ const StudentDashboard = () => {
       }
     };
 
-    fetchTimetable();
+    fetchTimetableData();
   }, [currentUser, token]);
 
   const handleTabChange = (event, newValue) => {
@@ -177,7 +186,7 @@ const StudentDashboard = () => {
             <>
               <DashboardHeader>
                 <Typography variant="h5" color="#333">
-                  Student Dashboard
+                  Teacher Dashboard
                 </Typography>
                 <Actions>
                   <StyledButton variant="secondary">Export Timetable</StyledButton>
@@ -227,7 +236,7 @@ const StudentDashboard = () => {
             </>
           )}
           {tabValue === 1 && (
-            <TimetableVisualization timetables={timetables} role="student" />
+            <TimetableVisualization timetables={timetables} role="teacher" />
           )}
         </Content>
       </MainContainer>
@@ -235,4 +244,4 @@ const StudentDashboard = () => {
   );
 };
 
-export default StudentDashboard;
+export default TeacherDashboard;
